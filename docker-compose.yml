@@ -1,0 +1,13 @@
+version: '3'
+services:
+  namastelar:
+    image: node:8.5-slim
+    container_name: namastelar
+    working_dir: /home/eder/Proiektuak/namastelar
+    command: npm start
+    ports:
+      - "4200:4200"
+    volumes:
+      - .:/home/eder/Proiektuak/namastelar
+    stdin_open: true
+    tty: true

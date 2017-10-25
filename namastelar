@@ -1,0 +1,92 @@
+#!/bin/bash
+
+parse_yaml() {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+      }
+   }'
+}
+
+eval $(parse_yaml docker-parameters.yml "yml_")
+
+
+COMPOSE="docker-compose"
+COMPOSE_FILE="$(ls docker-compose*)"
+
+if [[ $COMPOSE_FILE != "docker-compose.yml" ]]; then
+  COMPOSE="$COMPOSE -f $COMPOSE_FILE"
+fi
+
+CONTAINER="namastelar"
+ERROR_PREFIX="ERROR ::"
+EXEC="$COMPOSE exec --user www-data"
+EXEC_PRIVILEGED="$COMPOSE exec --user root"
+BASH_C="bash -c"
+FOUND=0
+
+if [[ $# < 1 ]]; then
+    echo "$ERROR_PREFIX Not argument passed (start/stop/restart)";
+    exit 1;
+fi
+
+# Docker handling
+if [[ $1 == "start" ]]; then
+    if [[ $# > 1 && $2 == "-b" ]]; then
+      $COMPOSE up -d --build
+    else
+      if [[ $# > 1 && $2 == "--dev" ]]; then
+        $COMPOSE up
+      else
+        $COMPOSE up -d
+      fi
+    fi
+    FOUND=1
+fi
+
+if [[ $1 == "stop" ]]; then
+    $COMPOSE down
+    FOUND=1
+fi
+
+if [[ $1 == "restart" ]]; then
+    $COMPOSE down
+    $COMPOSE up -d
+    FOUND=1
+fi
+
+# Install dependencies
+if [[ $1 == "install" ]]; then
+    if [[ $# > 1 && $2 == "ng" ]]; then
+        $EXEC_PRIVILEGED $CONTAINER $BASH_C "npm install -g @angular/cli";
+    else
+        $EXEC_PRIVILEGED $CONTAINER $BASH_C "npm install";
+    fi
+    FOUND=1
+fi
+
+
+if [[ $1 == "ng" ]]; then
+    $EXEC $CONTAINER $BASH_C "ng $2 $3 $4";
+    FOUND=1
+fi
+
+# Help handling
+if [[ $1 == "--help" ]]; then
+    echo "###################################################";
+    echo "Namaste help:";
+    echo "==========================================";
+    echo "1.- Docker containers: ./namastelar <start/stop/restart>";
+    echo "2.- Install NPM dependencies: ./namastelar install";
+    echo "3.- Angular client (for Angular's commands): ./namaste ng";
+    echo "###################################################";
+    FOUND=1
+fi
